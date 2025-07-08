@@ -181,7 +181,7 @@ backend:
     implemented: true
     working: false
     file: "server.py"
-    stuck_count: 1
+    stuck_count: 2
     priority: "high"
     needs_retesting: false
     status_history:
@@ -194,6 +194,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "Tested the Twitter API integration with the updated Access Token Secret. The integration is still failing with 401 Unauthorized errors. Detailed testing of both OAuth 1.0a and OAuth 2.0 authentication methods shows that the credentials are either invalid or expired. The error message '401 Unauthorized - 89 - Invalid or expired token' indicates that the Twitter API tokens need to be regenerated or verified. The code implementation is correct, but valid Twitter API credentials are required for the integration to work."
+      - working: false
+        agent: "testing"
+        comment: "Tested the Twitter API integration with fresh regenerated credentials. The credentials are valid and authentication works (verified with tweepy's verify_credentials method), but the app doesn't have the necessary permissions to post tweets. The error message '403 Forbidden - Your client app is not configured with the appropriate oauth1 app permissions for this endpoint' indicates that the Twitter Developer account needs a higher access level to post tweets. The code implementation is correct, but the Twitter Developer account needs to be upgraded to a higher tier or granted additional permissions to enable tweet posting functionality."
 
 frontend:
   - task: "Social media management dashboard UI"
