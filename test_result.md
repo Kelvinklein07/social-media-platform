@@ -191,6 +191,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "Tested the Twitter API integration. The code implementation is correct, but the Twitter API credentials are not working. All Twitter API calls return a 401 Unauthorized error. The enhanced post model with social_post_ids field is implemented correctly, but since the Twitter API calls fail, no Twitter post IDs are being stored. The Twitter-specific endpoints (/api/twitter/post and /api/twitter/analytics/{tweet_id}) are implemented correctly but return 401 errors due to invalid credentials."
+      - working: false
+        agent: "testing"
+        comment: "Tested the Twitter API integration with the updated Access Token Secret. The integration is still failing with 401 Unauthorized errors. Detailed testing of both OAuth 1.0a and OAuth 2.0 authentication methods shows that the credentials are either invalid or expired. The error message '401 Unauthorized - 89 - Invalid or expired token' indicates that the Twitter API tokens need to be regenerated or verified. The code implementation is correct, but valid Twitter API credentials are required for the integration to work."
 
 frontend:
   - task: "Social media management dashboard UI"
