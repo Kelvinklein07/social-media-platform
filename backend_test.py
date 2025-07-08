@@ -311,27 +311,20 @@ def test_calendar_api():
     except Exception as e:
         return False, str(e)
 
-# Twitter-specific test functions
-def test_twitter_api_connection():
-    """Test Twitter API connection by checking if credentials are working"""
+# LinkedIn-specific test functions
+def test_linkedin_oauth_login():
+    """Test the LinkedIn OAuth login endpoint"""
     try:
-        # We'll use the direct Twitter post endpoint to test the connection
-        response = requests.post(f"{API_URL}/twitter/post", json={
-            "text": "Testing Twitter API connection. This is a test tweet. #testing #apiconnection"
-        })
-        
-        # Even if we get an error from Twitter (like duplicate content), 
-        # we can check if it's a Twitter API error vs. a credential error
+        response = requests.get(f"{API_URL}/auth/linkedin/login")
         if response.status_code == 200:
-            return True, response.json()
-        else:
-            response_text = response.text
-            # Check if the error is due to Twitter API rate limits or other Twitter-specific errors
-            if "Twitter API" in response_text or "tweet" in response_text.lower():
-                # This indicates the credentials are working but there's another Twitter-specific issue
-                return True, f"Twitter credentials appear valid, but got error: {response_text}"
+            result = response.json()
+            # Check if the response contains the expected fields
+            if 'authorization_url' in result and 'state' in result:
+                return True, result
             else:
-                return False, f"Status code: {response.status_code}, Response: {response_text}"
+                return False, f"Missing expected fields in response: {result}"
+        else:
+            return False, f"Status code: {response.status_code}, Response: {response.text}"
     except Exception as e:
         return False, str(e)
 
