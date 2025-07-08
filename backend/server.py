@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -11,6 +11,9 @@ import uuid
 from datetime import datetime, timedelta
 import base64
 import json
+import tweepy
+import tempfile
+import io
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,6 +22,25 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Twitter API v2 Client Setup
+twitter_client = tweepy.Client(
+    bearer_token=os.environ.get("TWITTER_BEARER_TOKEN"),
+    consumer_key=os.environ.get("TWITTER_API_KEY"),
+    consumer_secret=os.environ.get("TWITTER_API_SECRET"),
+    access_token=os.environ.get("TWITTER_ACCESS_TOKEN"),
+    access_token_secret=os.environ.get("TWITTER_ACCESS_TOKEN_SECRET"),
+    wait_on_rate_limit=True
+)
+
+# Twitter API v1.1 for media uploads
+twitter_auth = tweepy.OAuth1UserHandler(
+    os.environ.get("TWITTER_API_KEY"),
+    os.environ.get("TWITTER_API_SECRET"),
+    os.environ.get("TWITTER_ACCESS_TOKEN"),
+    os.environ.get("TWITTER_ACCESS_TOKEN_SECRET")
+)
+twitter_api = tweepy.API(twitter_auth)
 
 # Create the main app without a prefix
 app = FastAPI()
