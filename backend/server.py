@@ -87,6 +87,7 @@ class Post(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     user_id: str = "default_user"  # for MVP, single user
     analytics: Dict[str, Any] = {}
+    social_post_ids: Dict[str, str] = {}  # platform -> post_id mapping
 
 class PostCreate(BaseModel):
     title: str
@@ -114,6 +115,73 @@ class Analytics(BaseModel):
     impressions: int = 0
     engagement_rate: float = 0.0
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class TwitterPostRequest(BaseModel):
+    text: str
+    media_files: List[str] = []  # base64 encoded media
+
+# Helper function to decode base64 media
+def decode_base64_media(base64_data: str) -> bytes:
+    """Decode base64 media data"""
+    if base64_data.startswith('data:'):
+        base64_data = base64_data.split(',')[1]
+    return base64.b64decode(base64_data)
+
+# Twitter Integration Functions
+async def post_to_twitter(content: str, media_files: List[str] = None) -> Dict[str, Any]:
+    """Post content to Twitter with optional media"""
+    try:
+        media_ids = []
+        
+        # Handle media uploads
+        if media_files:
+            for media_file in media_files:
+                try:
+                    # Decode base64 media
+                    media_data = decode_base64_media(media_file)
+                    
+                    # Create temporary file
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
+                        temp_file.write(media_data)
+                        temp_file_path = temp_file.name
+                    
+                    # Upload media to Twitter
+                    media = twitter_api.media_upload(temp_file_path)
+                    media_ids.append(media.media_id)
+                    
+                    # Clean up temp file
+                    os.unlink(temp_file_path)
+                except Exception as e:
+                    logging.error(f"Error uploading media to Twitter: {str(e)}")
+                    continue
+        
+        # Post tweet
+        if media_ids:
+            response = twitter_client.create_tweet(text=content, media_ids=media_ids)
+        else:
+            response = twitter_client.create_tweet(text=content)
+        
+        # Get tweet details for analytics
+        tweet_id = response.data['id']
+        tweet_details = twitter_client.get_tweet(
+            tweet_id,
+            tweet_fields=['created_at', 'public_metrics']
+        )
+        
+        return {
+            'success': True,
+            'post_id': tweet_id,
+            'platform': 'twitter',
+            'metrics': tweet_details.data.public_metrics if tweet_details.data.public_metrics else {}
+        }
+        
+    except Exception as e:
+        logging.error(f"Error posting to Twitter: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'platform': 'twitter'
+        }
 
 # Original routes
 @api_router.get("/")
