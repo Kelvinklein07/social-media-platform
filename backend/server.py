@@ -288,42 +288,93 @@ async def delete_post(post_id: str):
         raise HTTPException(status_code=404, detail="Post not found")
     return {"message": "Post deleted successfully"}
 
-# Publish post to social media platforms
+# Enhanced publish post to social media platforms
 @api_router.post("/posts/{post_id}/publish")
 async def publish_post(post_id: str):
     post = await db.posts.find_one({"id": post_id})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     
-    # For MVP, we'll just update the status to published
-    # In later phases, we'll add actual API calls to social media platforms
+    post_obj = Post(**post)
+    publish_results = {}
+    
+    # Publish to selected platforms
+    for platform in post_obj.platforms:
+        if platform == "twitter":
+            result = await post_to_twitter(post_obj.content, post_obj.media_files)
+            publish_results[platform] = result
+            
+            # Store social post ID and analytics
+            if result['success']:
+                post_obj.social_post_ids[platform] = result['post_id']
+                
+                # Create analytics entry
+                analytics_data = Analytics(
+                    post_id=post_id,
+                    platform=platform,
+                    likes=result['metrics'].get('like_count', 0),
+                    shares=result['metrics'].get('retweet_count', 0),
+                    comments=result['metrics'].get('reply_count', 0),
+                    impressions=result['metrics'].get('impression_count', 0)
+                )
+                await db.analytics.insert_one(analytics_data.dict())
+        else:
+            # Placeholder for other platforms
+            publish_results[platform] = {
+                'success': False,
+                'error': f'{platform} integration not yet implemented',
+                'platform': platform
+            }
+    
+    # Update post status
+    status = "published" if any(r['success'] for r in publish_results.values()) else "failed"
     await db.posts.update_one(
         {"id": post_id},
         {"$set": {
-            "status": "published",
-            "published_time": datetime.utcnow()
+            "status": status,
+            "published_time": datetime.utcnow(),
+            "social_post_ids": post_obj.social_post_ids,
+            "analytics": publish_results
         }}
     )
     
-    return {"message": "Post published successfully"}
+    return {
+        "message": "Post publishing completed",
+        "results": publish_results
+    }
 
-# Calendar view - get posts by date range
-@api_router.get("/posts/calendar")
-async def get_posts_calendar(start_date: str, end_date: str):
+# Twitter-specific endpoints
+@api_router.post("/twitter/post")
+async def post_tweet_direct(tweet_request: TwitterPostRequest):
+    """Direct Twitter posting endpoint"""
+    result = await post_to_twitter(tweet_request.text, tweet_request.media_files)
+    
+    if result['success']:
+        return {
+            "message": "Tweet posted successfully",
+            "tweet_id": result['post_id'],
+            "metrics": result['metrics']
+        }
+    else:
+        raise HTTPException(status_code=400, detail=result['error'])
+
+@api_router.get("/twitter/analytics/{tweet_id}")
+async def get_twitter_analytics(tweet_id: str):
+    """Get Twitter analytics for a specific tweet"""
     try:
-        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date format")
-    
-    posts = await db.posts.find({
-        "$or": [
-            {"scheduled_time": {"$gte": start, "$lte": end}},
-            {"published_time": {"$gte": start, "$lte": end}}
-        ]
-    }).sort("scheduled_time", 1).to_list(1000)
-    
-    return [Post(**post) for post in posts]
+        tweet = twitter_client.get_tweet(
+            tweet_id,
+            tweet_fields=['created_at', 'public_metrics']
+        )
+        
+        return {
+            "tweet_id": tweet_id,
+            "text": tweet.data.text,
+            "created_at": str(tweet.data.created_at),
+            "metrics": tweet.data.public_metrics
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching Twitter analytics: {str(e)}")
 
 # Analytics endpoints
 @api_router.post("/analytics", response_model=Analytics)
