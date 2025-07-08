@@ -49,6 +49,24 @@ linkedin_test_post = {
     "scheduled_time": (datetime.utcnow() + timedelta(days=1)).isoformat()
 }
 
+# TikTok-specific test post
+tiktok_test_post = {
+    "title": "TikTok Integration Test",
+    "content": "Testing TikTok integration with the social media management platform. #testing #tiktok",
+    "media_files": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="],
+    "platforms": ["tiktok"],
+    "scheduled_time": (datetime.utcnow() + timedelta(days=1)).isoformat()
+}
+
+# Multi-platform test post
+multi_platform_test_post = {
+    "title": "Multi-Platform Integration Test",
+    "content": "Testing multi-platform integration with Twitter, LinkedIn, and TikTok. #testing #multiplatform",
+    "media_files": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="],
+    "platforms": ["twitter", "linkedin", "tiktok"],
+    "scheduled_time": (datetime.utcnow() + timedelta(days=1)).isoformat()
+}
+
 # Direct Twitter post test data
 direct_twitter_post = {
     "text": "Testing direct Twitter posting API endpoint. #testing #directpost",
@@ -59,6 +77,18 @@ direct_twitter_post = {
 direct_linkedin_post = {
     "text": "Testing direct LinkedIn posting API endpoint. #testing #directpost",
     "visibility": "PUBLIC"
+}
+
+# TikTok test data
+tiktok_video_request = {
+    "title": "TikTok Test Video",
+    "description": "Testing TikTok video upload API endpoint. #testing #tiktok"
+}
+
+# TikTok auth data (invalid for testing error handling)
+invalid_tiktok_auth = {
+    "access_token": "invalid_tiktok_token_for_testing",
+    "advertiser_id": "invalid_advertiser_id_for_testing"
 }
 
 # Invalid LinkedIn auth token for testing error handling
