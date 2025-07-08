@@ -1,0 +1,10 @@
+{
+  "name": "social-media-platform",
+  "version": "1.0.0",
+  "description": "Social Media Management Platform",
+  "main": "frontend/src/index.js",
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "start": "cd frontend && npm start"
+  }
+}
