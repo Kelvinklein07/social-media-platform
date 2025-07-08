@@ -657,6 +657,7 @@ function App() {
   const [posts, setPosts] = useState([]);
   const [showPostCreator, setShowPostCreator] = useState(false);
   const [analytics, setAnalytics] = useState({});
+  const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
     fetchPosts();
@@ -705,6 +706,12 @@ function App() {
     } catch (error) {
       console.error('Error deleting post:', error);
     }
+  };
+
+  const handleDateSelect = (date) => {
+    setSelectedDate(date);
+    // You could show a modal or sidebar with posts for that date
+    console.log('Selected date:', date);
   };
 
   const renderDashboard = () => (
@@ -875,17 +882,20 @@ function App() {
         {currentView === 'dashboard' && renderDashboard()}
         {currentView === 'posts' && renderPosts()}
         {currentView === 'calendar' && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Calendar View</h2>
-            <p className="text-gray-600">Calendar view coming soon...</p>
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h1 className="text-3xl font-bold text-gray-800">Content Calendar</h1>
+              <button
+                onClick={() => setShowPostCreator(true)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              >
+                Schedule New Post
+              </button>
+            </div>
+            <Calendar posts={posts} onDateSelect={handleDateSelect} />
           </div>
         )}
-        {currentView === 'analytics' && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Analytics Dashboard</h2>
-            <p className="text-gray-600">Advanced analytics coming soon...</p>
-          </div>
-        )}
+        {currentView === 'analytics' && <AnalyticsDashboard />}
       </main>
     </div>
   );
