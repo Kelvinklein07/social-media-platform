@@ -437,10 +437,99 @@ def run_all_tests():
     print("BACKEND API TESTS COMPLETED")
     print("=" * 80)
 
-if __name__ == "__main__":
+def test_twitter_credentials():
+    """Test each Twitter credential individually to identify which one might be causing the issue"""
     print("\n" + "=" * 80)
-    print("TESTING TWITTER INTEGRATION WITH UPDATED ACCESS TOKEN SECRET")
+    print("TESTING TWITTER CREDENTIALS")
     print("=" * 80)
     
-    # Only run the Twitter integration test
-    test_twitter_integration()
+    # Load environment variables from backend/.env
+    load_dotenv('/app/backend/.env')
+    
+    # Get Twitter credentials
+    bearer_token = os.environ.get("TWITTER_BEARER_TOKEN")
+    api_key = os.environ.get("TWITTER_API_KEY")
+    api_secret = os.environ.get("TWITTER_API_SECRET")
+    access_token = os.environ.get("TWITTER_ACCESS_TOKEN")
+    access_token_secret = os.environ.get("TWITTER_ACCESS_TOKEN_SECRET")
+    
+    # Print credential information (without revealing full values)
+    print(f"Bearer Token: {bearer_token[:10]}...{bearer_token[-5:] if bearer_token else 'None'}")
+    print(f"API Key: {api_key[:5]}...{api_key[-5:] if api_key else 'None'}")
+    print(f"API Secret: {api_secret[:5]}...{api_secret[-5:] if api_secret else 'None'}")
+    print(f"Access Token: {access_token[:5]}...{access_token[-5:] if access_token else 'None'}")
+    print(f"Access Token Secret: {access_token_secret[:5]}...{access_token_secret[-5:] if access_token_secret else 'None'}")
+    
+    # Test OAuth 1.0a authentication (used for media uploads)
+    print("\nTesting OAuth 1.0a Authentication (for media uploads):")
+    try:
+        import tweepy
+        auth = tweepy.OAuth1UserHandler(
+            api_key,
+            api_secret,
+            access_token,
+            access_token_secret
+        )
+        api = tweepy.API(auth)
+        
+        # Try to verify credentials
+        try:
+            user = api.verify_credentials()
+            print(f"✅ OAuth 1.0a Authentication: PASSED")
+            print(f"   Authenticated as: @{user.screen_name}")
+        except Exception as e:
+            print(f"❌ OAuth 1.0a Authentication: FAILED")
+            print(f"   Error: {str(e)}")
+            
+            # Check if it's a specific credential issue
+            if "401" in str(e):
+                print("   This is likely an issue with one of the OAuth 1.0a credentials:")
+                print("   - API Key")
+                print("   - API Secret")
+                print("   - Access Token")
+                print("   - Access Token Secret")
+    except Exception as e:
+        print(f"❌ OAuth 1.0a Authentication Setup: FAILED")
+        print(f"   Error: {str(e)}")
+    
+    # Test OAuth 2.0 authentication (used for most API v2 endpoints)
+    print("\nTesting OAuth 2.0 Authentication (for API v2):")
+    try:
+        client = tweepy.Client(
+            bearer_token=bearer_token,
+            consumer_key=api_key,
+            consumer_secret=api_secret,
+            access_token=access_token,
+            access_token_secret=access_token_secret
+        )
+        
+        # Try to get user information
+        try:
+            # Get user information using the access token
+            response = client.get_me()
+            print(f"✅ OAuth 2.0 Authentication: PASSED")
+            print(f"   Authenticated as: @{response.data.username}")
+        except Exception as e:
+            print(f"❌ OAuth 2.0 Authentication: FAILED")
+            print(f"   Error: {str(e)}")
+            
+            # Check if it's a specific credential issue
+            if "401" in str(e):
+                print("   This is likely an issue with one of the OAuth 2.0 credentials:")
+                print("   - Bearer Token")
+                print("   - Or the combination of OAuth 1.0a credentials")
+    except Exception as e:
+        print(f"❌ OAuth 2.0 Authentication Setup: FAILED")
+        print(f"   Error: {str(e)}")
+    
+    print("\n" + "=" * 80)
+    print("TWITTER CREDENTIALS TESTING COMPLETED")
+    print("=" * 80)
+
+if __name__ == "__main__":
+    print("\n" + "=" * 80)
+    print("TESTING TWITTER CREDENTIALS WITH UPDATED ACCESS TOKEN SECRET")
+    print("=" * 80)
+    
+    # Only run the Twitter credentials test
+    test_twitter_credentials()
