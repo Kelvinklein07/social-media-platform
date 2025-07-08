@@ -16,6 +16,7 @@ import tempfile
 import io
 import requests
 from requests_oauthlib import OAuth2Session
+import httpx
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -50,6 +51,11 @@ LINKEDIN_CLIENT_SECRET = os.environ.get("LINKEDIN_CLIENT_SECRET")
 LINKEDIN_REDIRECT_URI = "http://localhost:8000/auth/linkedin/callback"
 LINKEDIN_AUTHORIZATION_BASE_URL = "https://www.linkedin.com/oauth/v2/authorization"
 LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
+
+# TikTok Business API Configuration
+TIKTOK_CLIENT_KEY = os.environ.get("TIKTOK_CLIENT_KEY")
+TIKTOK_CLIENT_SECRET = os.environ.get("TIKTOK_CLIENT_SECRET")
+TIKTOK_BASE_URL = "https://business-api.tiktok.com/open_api/v1.3"
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -136,6 +142,111 @@ class LinkedInPostRequest(BaseModel):
 
 class LinkedInAuthRequest(BaseModel):
     access_token: str
+
+class TikTokVideoRequest(BaseModel):
+    title: str
+    description: str = ""
+    privacy_level: str = "PUBLIC_TO_EVERYONE"
+
+class TikTokAuthRequest(BaseModel):
+    access_token: str
+    advertiser_id: str
+
+# TikTok Client Class
+class TikTokClient:
+    def __init__(self, access_token: str, advertiser_id: str):
+        self.access_token = access_token
+        self.advertiser_id = advertiser_id
+        self.headers = {
+            "Access-Token": access_token,
+            "Content-Type": "application/json"
+        }
+    
+    async def upload_video(self, video_content: bytes, title: str, description: str = "") -> Dict[str, Any]:
+        """Upload video to TikTok"""
+        try:
+            # Initialize video upload
+            async with httpx.AsyncClient() as http_client:
+                init_response = await http_client.post(
+                    f"{TIKTOK_BASE_URL}/file/video/ad/upload/",
+                    headers=self.headers,
+                    json={
+                        "advertiser_id": self.advertiser_id,
+                        "upload_type": "UPLOAD_BY_FILE",
+                        "video_file_size": len(video_content)
+                    }
+                )
+                
+                init_result = init_response.json()
+                
+                if init_result.get("code") != 0:
+                    return {
+                        'success': False,
+                        'error': f"Upload init failed: {init_result.get('message')}",
+                        'platform': 'tiktok'
+                    }
+                
+                upload_url = init_result["data"]["upload_url"]
+                video_id = init_result["data"]["video_id"]
+                
+                # Upload video content
+                upload_response = await http_client.post(
+                    upload_url,
+                    files={"video": ("video.mp4", video_content, "video/mp4")}
+                )
+                
+                if upload_response.status_code == 200:
+                    return {
+                        'success': True,
+                        'post_id': video_id,
+                        'platform': 'tiktok',
+                        'upload_url': upload_url
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': f"Video upload failed: {upload_response.text}",
+                        'platform': 'tiktok'
+                    }
+        
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'platform': 'tiktok'
+            }
+    
+    async def publish_video(self, video_id: str, privacy_level: str = "PUBLIC_TO_EVERYONE") -> Dict[str, Any]:
+        """Publish uploaded video"""
+        try:
+            async with httpx.AsyncClient() as http_client:
+                response = await http_client.post(
+                    f"{TIKTOK_BASE_URL}/video/publish/",
+                    headers=self.headers,
+                    json={
+                        "advertiser_id": self.advertiser_id,
+                        "video_id": video_id,
+                        "privacy_level": privacy_level
+                    }
+                )
+                
+                result = response.json()
+                
+                if result.get("code") == 0:
+                    return {'success': True, 'platform': 'tiktok'}
+                else:
+                    return {
+                        'success': False,
+                        'error': f"Publish failed: {result.get('message')}",
+                        'platform': 'tiktok'
+                    }
+        
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'platform': 'tiktok'
+            }
 
 # Helper function to decode base64 media
 def decode_base64_media(base64_data: str) -> bytes:
@@ -274,10 +385,55 @@ async def post_to_linkedin(content: str, access_token: str, visibility: str = "P
             'platform': 'linkedin'
         }
 
+# TikTok Integration Functions
+async def post_to_tiktok(title: str, description: str, media_files: List[str], access_token: str, advertiser_id: str) -> Dict[str, Any]:
+    """Post video content to TikTok"""
+    try:
+        if not media_files:
+            return {
+                'success': False,
+                'error': 'TikTok requires video content',
+                'platform': 'tiktok'
+            }
+        
+        tiktok_client = TikTokClient(access_token, advertiser_id)
+        
+        # Use the first media file as video content
+        video_content = decode_base64_media(media_files[0])
+        
+        # Upload video
+        upload_result = await tiktok_client.upload_video(video_content, title, description)
+        
+        if upload_result['success']:
+            video_id = upload_result['post_id']
+            
+            # Publish video
+            publish_result = await tiktok_client.publish_video(video_id)
+            
+            if publish_result['success']:
+                return {
+                    'success': True,
+                    'post_id': video_id,
+                    'platform': 'tiktok',
+                    'metrics': {}
+                }
+            else:
+                return publish_result
+        else:
+            return upload_result
+            
+    except Exception as e:
+        logging.error(f"Error posting to TikTok: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'platform': 'tiktok'
+        }
+
 # Original routes
 @api_router.get("/")
 async def root():
-    return {"message": "Social Media Management Platform API with Twitter & LinkedIn Integration"}
+    return {"message": "Social Media Management Platform API with Twitter, LinkedIn & TikTok Integration"}
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -447,7 +603,7 @@ async def delete_post(post_id: str):
 
 # Enhanced publish post to social media platforms
 @api_router.post("/posts/{post_id}/publish")
-async def publish_post(post_id: str, linkedin_auth: Optional[LinkedInAuthRequest] = None):
+async def publish_post(post_id: str, linkedin_auth: Optional[LinkedInAuthRequest] = None, tiktok_auth: Optional[TikTokAuthRequest] = None):
     post = await db.posts.find_one({"id": post_id})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -499,6 +655,32 @@ async def publish_post(post_id: str, linkedin_auth: Optional[LinkedInAuthRequest
                 publish_results[platform] = {
                     'success': False,
                     'error': 'LinkedIn access token required',
+                    'platform': platform
+                }
+        
+        elif platform == "tiktok":
+            if tiktok_auth and tiktok_auth.access_token and tiktok_auth.advertiser_id:
+                result = await post_to_tiktok(post_obj.title, post_obj.content, post_obj.media_files, tiktok_auth.access_token, tiktok_auth.advertiser_id)
+                publish_results[platform] = result
+                
+                # Store social post ID
+                if result['success']:
+                    post_obj.social_post_ids[platform] = result['post_id']
+                    
+                    # Create analytics entry
+                    analytics_data = Analytics(
+                        post_id=post_id,
+                        platform=platform,
+                        likes=0,  # TikTok analytics would need separate API call
+                        shares=0,
+                        comments=0,
+                        impressions=0
+                    )
+                    await db.analytics.insert_one(analytics_data.dict())
+            else:
+                publish_results[platform] = {
+                    'success': False,
+                    'error': 'TikTok access token and advertiser ID required',
                     'platform': platform
                 }
         else:
@@ -595,6 +777,119 @@ async def get_linkedin_profile(access_token: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error fetching LinkedIn profile: {str(e)}")
 
+# TikTok-specific endpoints
+@api_router.post("/tiktok/upload")
+async def upload_tiktok_video(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    description: str = Form(""),
+    access_token: str = Form(...),
+    advertiser_id: str = Form(...)
+):
+    """Upload video to TikTok"""
+    try:
+        video_content = await file.read()
+        tiktok_client = TikTokClient(access_token, advertiser_id)
+        
+        result = await tiktok_client.upload_video(video_content, title, description)
+        
+        if result['success']:
+            # Store video metadata in MongoDB
+            video_record = {
+                "video_id": result['post_id'],
+                "title": title,
+                "description": description,
+                "status": "UPLOADED",
+                "file_name": file.filename,
+                "file_size": len(video_content),
+                "upload_timestamp": datetime.utcnow()
+            }
+            
+            await db.tiktok_videos.insert_one(video_record)
+            
+            return {
+                "success": True,
+                "video_id": result['post_id'],
+                "message": "Video uploaded successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail=result['error'])
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@api_router.post("/tiktok/publish/{video_id}")
+async def publish_tiktok_video(
+    video_id: str,
+    access_token: str,
+    advertiser_id: str,
+    privacy_level: str = "PUBLIC_TO_EVERYONE"
+):
+    """Publish uploaded TikTok video"""
+    try:
+        tiktok_client = TikTokClient(access_token, advertiser_id)
+        result = await tiktok_client.publish_video(video_id, privacy_level)
+        
+        if result['success']:
+            # Update video status in database
+            await db.tiktok_videos.update_one(
+                {"video_id": video_id},
+                {"$set": {"status": "PUBLISHED", "publish_timestamp": datetime.utcnow()}}
+            )
+            
+            return {"success": True, "message": "Video published successfully"}
+        else:
+            raise HTTPException(status_code=400, detail=result['error'])
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Publish failed: {str(e)}")
+
+@api_router.get("/tiktok/analytics/{video_id}")
+async def get_tiktok_analytics(video_id: str, access_token: str, advertiser_id: str):
+    """Get TikTok video analytics"""
+    try:
+        headers = {
+            "Access-Token": access_token,
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient() as http_client:
+            response = await http_client.get(
+                f"{TIKTOK_BASE_URL}/report/integrated/get/",
+                headers=headers,
+                params={
+                    "advertiser_id": advertiser_id,
+                    "report_type": "BASIC",
+                    "dimensions": ["video_id"],
+                    "metrics": ["impressions", "clicks", "video_play_actions"],
+                    "filters": [{"field": "video_id", "operator": "IN", "value": [video_id]}],
+                    "start_date": "2025-01-01",
+                    "end_date": "2025-12-31"
+                }
+            )
+            
+            result = response.json()
+            
+            if result.get("code") == 0:
+                analytics_data = result["data"]["list"][0] if result["data"]["list"] else {}
+                
+                # Store analytics in MongoDB
+                await db.tiktok_analytics.update_one(
+                    {"video_id": video_id},
+                    {"$set": {
+                        "analytics": analytics_data,
+                        "last_updated": datetime.utcnow()
+                    }},
+                    upsert=True
+                )
+                
+                return {"success": True, "analytics": analytics_data}
+            else:
+                raise HTTPException(status_code=400, detail=f"Analytics fetch failed: {result.get('message')}")
+                
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analytics failed: {str(e)}")
+
 # Analytics endpoints
 @api_router.post("/analytics", response_model=Analytics)
 async def create_analytics(analytics: Analytics):
@@ -617,11 +912,15 @@ async def get_dashboard_analytics():
     # Get recent analytics
     recent_analytics = await db.analytics.find().sort("created_at", -1).limit(10).to_list(10)
     
+    # Get TikTok video count
+    tiktok_videos = await db.tiktok_videos.count_documents({})
+    
     return {
         "total_posts": total_posts,
         "published_posts": published_posts,
         "scheduled_posts": scheduled_posts,
         "draft_posts": draft_posts,
+        "tiktok_videos": tiktok_videos,
         "recent_analytics": [Analytics(**analytic) for analytic in recent_analytics]
     }
 
