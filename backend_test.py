@@ -173,7 +173,22 @@ def test_calendar_api():
     start_date = datetime.utcnow().isoformat()
     end_date = (datetime.utcnow() + timedelta(days=30)).isoformat()
     
+    # Create a new post with scheduled_time within our date range for testing
+    scheduled_post = {
+        "title": "Scheduled Post for Calendar Test",
+        "content": "This is a test post for calendar API. #testing #calendar",
+        "media_files": [],
+        "platforms": ["twitter", "facebook"],
+        "scheduled_time": (datetime.utcnow() + timedelta(days=1)).isoformat()
+    }
+    
+    # Create the post first
     try:
+        create_response = requests.post(f"{API_URL}/posts", json=scheduled_post)
+        if create_response.status_code != 200:
+            return False, f"Failed to create test post for calendar. Status code: {create_response.status_code}"
+        
+        # Now test the calendar endpoint
         response = requests.get(f"{API_URL}/posts/calendar?start_date={start_date}&end_date={end_date}")
         if response.status_code == 200:
             return True, response.json()
