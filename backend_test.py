@@ -526,10 +526,191 @@ def test_twitter_credentials():
     print("TWITTER CREDENTIALS TESTING COMPLETED")
     print("=" * 80)
 
-if __name__ == "__main__":
+def test_twitter_with_fresh_credentials():
+    """Test Twitter integration with fresh regenerated credentials"""
     print("\n" + "=" * 80)
-    print("TESTING TWITTER CREDENTIALS WITH UPDATED ACCESS TOKEN SECRET")
+    print("TESTING TWITTER INTEGRATION WITH FRESH REGENERATED CREDENTIALS")
     print("=" * 80)
     
-    # Only run the Twitter credentials test
-    test_twitter_credentials()
+    # Step 1: Test Twitter API Authentication
+    print("\n1. Testing Twitter API Authentication")
+    simple_tweet = {
+        "text": f"Testing Twitter API with fresh credentials. Timestamp: {datetime.utcnow().isoformat()}"
+    }
+    
+    try:
+        response = requests.post(f"{API_URL}/twitter/post", json=simple_tweet)
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Twitter Authentication: PASSED")
+            print(f"   Response: {result}")
+            tweet_id = result.get('tweet_id')
+            print(f"   Tweet ID: {tweet_id}")
+        else:
+            print(f"❌ Twitter Authentication: FAILED")
+            print(f"   Status code: {response.status_code}")
+            print(f"   Response: {response.text}")
+            return
+    except Exception as e:
+        print(f"❌ Twitter Authentication: FAILED")
+        print(f"   Error: {str(e)}")
+        return
+    
+    print("-" * 80)
+    
+    # Step 2: Test Direct Tweet with Media
+    print("\n2. Testing Direct Tweet with Media")
+    media_tweet = {
+        "text": f"Testing Twitter media upload with fresh credentials. Timestamp: {datetime.utcnow().isoformat()}",
+        "media_files": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="]
+    }
+    
+    try:
+        response = requests.post(f"{API_URL}/twitter/post", json=media_tweet)
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Direct Tweet with Media: PASSED")
+            print(f"   Response: {result}")
+            media_tweet_id = result.get('tweet_id')
+            print(f"   Tweet ID: {media_tweet_id}")
+        else:
+            print(f"❌ Direct Tweet with Media: FAILED")
+            print(f"   Status code: {response.status_code}")
+            print(f"   Response: {response.text}")
+            media_tweet_id = None
+    except Exception as e:
+        print(f"❌ Direct Tweet with Media: FAILED")
+        print(f"   Error: {str(e)}")
+        media_tweet_id = None
+    
+    print("-" * 80)
+    
+    # Step 3: Test Platform Publishing
+    print("\n3. Testing Platform Publishing via Post Creation and Publish")
+    
+    # Create a Twitter post
+    twitter_post = {
+        "title": "Twitter Platform Test",
+        "content": f"Testing Twitter platform publishing with fresh credentials. Timestamp: {datetime.utcnow().isoformat()}",
+        "media_files": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="],
+        "platforms": ["twitter"],
+        "scheduled_time": None
+    }
+    
+    try:
+        # Create the post
+        create_response = requests.post(f"{API_URL}/posts", json=twitter_post)
+        if create_response.status_code == 200:
+            post_result = create_response.json()
+            post_id = post_result.get('id')
+            print(f"✅ Post Creation: PASSED")
+            print(f"   Post ID: {post_id}")
+            
+            # Publish the post
+            publish_response = requests.post(f"{API_URL}/posts/{post_id}/publish")
+            if publish_response.status_code == 200:
+                publish_result = publish_response.json()
+                print(f"✅ Platform Publishing: PASSED")
+                print(f"   Response: {publish_result}")
+                
+                # Check if Twitter publishing was successful
+                if 'results' in publish_result and 'twitter' in publish_result['results']:
+                    twitter_result = publish_result['results']['twitter']
+                    if twitter_result.get('success'):
+                        platform_tweet_id = twitter_result.get('post_id')
+                        print(f"   Twitter Tweet ID: {platform_tweet_id}")
+                    else:
+                        print(f"❌ Twitter Publishing: FAILED")
+                        print(f"   Error: {twitter_result.get('error')}")
+                        platform_tweet_id = None
+                else:
+                    print(f"❌ Twitter Publishing: FAILED")
+                    print(f"   No Twitter results found in response")
+                    platform_tweet_id = None
+            else:
+                print(f"❌ Platform Publishing: FAILED")
+                print(f"   Status code: {publish_response.status_code}")
+                print(f"   Response: {publish_response.text}")
+                platform_tweet_id = None
+        else:
+            print(f"❌ Post Creation: FAILED")
+            print(f"   Status code: {create_response.status_code}")
+            print(f"   Response: {create_response.text}")
+            post_id = None
+            platform_tweet_id = None
+    except Exception as e:
+        print(f"❌ Platform Publishing: FAILED")
+        print(f"   Error: {str(e)}")
+        platform_tweet_id = None
+    
+    print("-" * 80)
+    
+    # Step 4: Test Analytics Retrieval
+    print("\n4. Testing Analytics Retrieval")
+    
+    # Test analytics for all tweet IDs we've collected
+    for tweet_source, current_tweet_id in [
+        ("Simple Tweet", tweet_id if 'tweet_id' in locals() else None),
+        ("Media Tweet", media_tweet_id),
+        ("Platform Tweet", platform_tweet_id if 'platform_tweet_id' in locals() else None)
+    ]:
+        if current_tweet_id:
+            try:
+                analytics_response = requests.get(f"{API_URL}/twitter/analytics/{current_tweet_id}")
+                if analytics_response.status_code == 200:
+                    analytics_result = analytics_response.json()
+                    print(f"✅ Analytics for {tweet_source}: PASSED")
+                    print(f"   Response: {analytics_result}")
+                else:
+                    print(f"❌ Analytics for {tweet_source}: FAILED")
+                    print(f"   Status code: {analytics_response.status_code}")
+                    print(f"   Response: {analytics_response.text}")
+            except Exception as e:
+                print(f"❌ Analytics for {tweet_source}: FAILED")
+                print(f"   Error: {str(e)}")
+    
+    print("-" * 80)
+    
+    # Step 5: Verify Enhanced Model (social_post_ids)
+    print("\n5. Verifying Enhanced Model (social_post_ids storage)")
+    
+    if 'post_id' in locals() and post_id:
+        try:
+            post_response = requests.get(f"{API_URL}/posts/{post_id}")
+            if post_response.status_code == 200:
+                post_data = post_response.json()
+                social_post_ids = post_data.get('social_post_ids', {})
+                
+                if 'twitter' in social_post_ids:
+                    stored_tweet_id = social_post_ids['twitter']
+                    print(f"✅ Enhanced Model Verification: PASSED")
+                    print(f"   Twitter post ID stored: {stored_tweet_id}")
+                    
+                    if platform_tweet_id and stored_tweet_id == platform_tweet_id:
+                        print(f"✅ ID Verification: PASSED - Stored ID matches actual tweet ID")
+                    else:
+                        print(f"❌ ID Verification: FAILED - Stored ID doesn't match actual tweet ID")
+                        print(f"   Stored: {stored_tweet_id}")
+                        print(f"   Actual: {platform_tweet_id}")
+                else:
+                    print(f"❌ Enhanced Model Verification: FAILED")
+                    print(f"   No Twitter post ID stored in social_post_ids")
+            else:
+                print(f"❌ Enhanced Model Verification: FAILED")
+                print(f"   Status code: {post_response.status_code}")
+                print(f"   Response: {post_response.text}")
+        except Exception as e:
+            print(f"❌ Enhanced Model Verification: FAILED")
+            print(f"   Error: {str(e)}")
+    
+    print("\n" + "=" * 80)
+    print("TWITTER INTEGRATION TESTING WITH FRESH CREDENTIALS COMPLETED")
+    print("=" * 80)
+
+if __name__ == "__main__":
+    print("\n" + "=" * 80)
+    print("TESTING TWITTER INTEGRATION WITH FRESH REGENERATED CREDENTIALS")
+    print("=" * 80)
+    
+    # Run the Twitter integration test with fresh credentials
+    test_twitter_with_fresh_credentials()
