@@ -14,6 +14,8 @@ import json
 import tweepy
 import tempfile
 import io
+import requests
+from requests_oauthlib import OAuth2Session
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -41,6 +43,13 @@ twitter_auth = tweepy.OAuth1UserHandler(
     os.environ.get("TWITTER_ACCESS_TOKEN_SECRET")
 )
 twitter_api = tweepy.API(twitter_auth)
+
+# LinkedIn OAuth Configuration
+LINKEDIN_CLIENT_ID = os.environ.get("LINKEDIN_CLIENT_ID")
+LINKEDIN_CLIENT_SECRET = os.environ.get("LINKEDIN_CLIENT_SECRET")
+LINKEDIN_REDIRECT_URI = "http://localhost:8000/auth/linkedin/callback"
+LINKEDIN_AUTHORIZATION_BASE_URL = "https://www.linkedin.com/oauth/v2/authorization"
+LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -120,6 +129,14 @@ class TwitterPostRequest(BaseModel):
     text: str
     media_files: List[str] = []  # base64 encoded media
 
+class LinkedInPostRequest(BaseModel):
+    text: str
+    visibility: str = "PUBLIC"  # PUBLIC, CONNECTIONS
+    media_url: Optional[str] = None
+
+class LinkedInAuthRequest(BaseModel):
+    access_token: str
+
 # Helper function to decode base64 media
 def decode_base64_media(base64_data: str) -> bytes:
     """Decode base64 media data"""
@@ -183,10 +200,84 @@ async def post_to_twitter(content: str, media_files: List[str] = None) -> Dict[s
             'platform': 'twitter'
         }
 
+# LinkedIn Integration Functions
+async def post_to_linkedin(content: str, access_token: str, visibility: str = "PUBLIC", media_files: List[str] = None) -> Dict[str, Any]:
+    """Post content to LinkedIn with optional media"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "X-Restli-Protocol-Version": "2.0.0"
+        }
+        
+        # Get user profile to get person URN
+        profile_response = requests.get(
+            "https://api.linkedin.com/v2/people/~:(id)",
+            headers=headers
+        )
+        
+        if profile_response.status_code != 200:
+            return {
+                'success': False,
+                'error': f"Failed to get user profile: {profile_response.text}",
+                'platform': 'linkedin'
+            }
+        
+        user_id = profile_response.json()["id"]
+        
+        # Basic text post payload
+        payload = {
+            "author": f"urn:li:person:{user_id}",
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {
+                "com.linkedin.ugc.ShareContent": {
+                    "shareCommentary": {
+                        "text": content
+                    },
+                    "shareMediaCategory": "NONE"
+                }
+            },
+            "visibility": {
+                "com.linkedin.ugc.MemberNetworkVisibility": visibility
+            }
+        }
+        
+        # Post to LinkedIn
+        response = requests.post(
+            "https://api.linkedin.com/v2/ugcPosts",
+            json=payload,
+            headers=headers
+        )
+        
+        if response.status_code != 201:
+            return {
+                'success': False,
+                'error': f"LinkedIn API error: {response.text}",
+                'platform': 'linkedin'
+            }
+        
+        # Get post URN from response headers
+        post_urn = response.headers.get("X-Restli-Id")
+        
+        return {
+            'success': True,
+            'post_id': post_urn,
+            'platform': 'linkedin',
+            'metrics': {}
+        }
+        
+    except Exception as e:
+        logging.error(f"Error posting to LinkedIn: {str(e)}")
+        return {
+            'success': False,
+            'error': str(e),
+            'platform': 'linkedin'
+        }
+
 # Original routes
 @api_router.get("/")
 async def root():
-    return {"message": "Social Media Management Platform API with Twitter Integration"}
+    return {"message": "Social Media Management Platform API with Twitter & LinkedIn Integration"}
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
@@ -199,6 +290,72 @@ async def create_status_check(input: StatusCheckCreate):
 async def get_status_checks():
     status_checks = await db.status_checks.find().to_list(1000)
     return [StatusCheck(**status_check) for status_check in status_checks]
+
+# LinkedIn OAuth endpoints
+@api_router.get("/auth/linkedin/login")
+async def linkedin_login():
+    """Initiate LinkedIn OAuth flow"""
+    scope = ["r_liteprofile", "r_emailaddress", "w_member_social"]
+    linkedin = OAuth2Session(LINKEDIN_CLIENT_ID, redirect_uri=LINKEDIN_REDIRECT_URI, scope=scope)
+    authorization_url, state = linkedin.authorization_url(LINKEDIN_AUTHORIZATION_BASE_URL)
+    
+    return {
+        "authorization_url": authorization_url,
+        "state": state
+    }
+
+@api_router.get("/auth/linkedin/callback")
+async def linkedin_callback(code: str, state: str = None):
+    """Handle LinkedIn OAuth callback and exchange code for token"""
+    try:
+        linkedin = OAuth2Session(LINKEDIN_CLIENT_ID, redirect_uri=LINKEDIN_REDIRECT_URI)
+        token = linkedin.fetch_token(
+            LINKEDIN_TOKEN_URL,
+            client_secret=LINKEDIN_CLIENT_SECRET,
+            code=code,
+            include_client_id=True
+        )
+        
+        # Get user profile information
+        headers = {
+            "Authorization": f"Bearer {token['access_token']}",
+            "X-Restli-Protocol-Version": "2.0.0"
+        }
+        
+        profile_response = requests.get(
+            "https://api.linkedin.com/v2/people/~:(id,firstName,lastName)",
+            headers=headers
+        )
+        
+        if profile_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to fetch user profile")
+        
+        profile_data = profile_response.json()
+        
+        # Store user and token in MongoDB
+        user_data = {
+            "linkedin_id": profile_data["id"],
+            "first_name": profile_data["firstName"]["localized"]["en_US"],
+            "last_name": profile_data["lastName"]["localized"]["en_US"],
+            "access_token": token["access_token"],
+            "token_expires_at": datetime.utcnow() + timedelta(seconds=token.get("expires_in", 3600)),
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        # Upsert user data
+        await db.linkedin_users.insert_one(user_data)
+        
+        return {
+            "access_token": token["access_token"],
+            "user_id": profile_data["id"],
+            "expires_in": token.get("expires_in", 3600),
+            "first_name": profile_data["firstName"]["localized"]["en_US"],
+            "last_name": profile_data["lastName"]["localized"]["en_US"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"OAuth callback failed: {str(e)}")
 
 # Social Accounts Management
 @api_router.post("/social-accounts", response_model=SocialAccount)
@@ -290,7 +447,7 @@ async def delete_post(post_id: str):
 
 # Enhanced publish post to social media platforms
 @api_router.post("/posts/{post_id}/publish")
-async def publish_post(post_id: str):
+async def publish_post(post_id: str, linkedin_auth: Optional[LinkedInAuthRequest] = None):
     post = await db.posts.find_one({"id": post_id})
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
@@ -318,6 +475,32 @@ async def publish_post(post_id: str):
                     impressions=result['metrics'].get('impression_count', 0)
                 )
                 await db.analytics.insert_one(analytics_data.dict())
+        
+        elif platform == "linkedin":
+            if linkedin_auth and linkedin_auth.access_token:
+                result = await post_to_linkedin(post_obj.content, linkedin_auth.access_token, "PUBLIC", post_obj.media_files)
+                publish_results[platform] = result
+                
+                # Store social post ID
+                if result['success']:
+                    post_obj.social_post_ids[platform] = result['post_id']
+                    
+                    # Create analytics entry
+                    analytics_data = Analytics(
+                        post_id=post_id,
+                        platform=platform,
+                        likes=0,  # LinkedIn analytics would need separate API call
+                        shares=0,
+                        comments=0,
+                        impressions=0
+                    )
+                    await db.analytics.insert_one(analytics_data.dict())
+            else:
+                publish_results[platform] = {
+                    'success': False,
+                    'error': 'LinkedIn access token required',
+                    'platform': platform
+                }
         else:
             # Placeholder for other platforms
             publish_results[platform] = {
@@ -375,6 +558,42 @@ async def get_twitter_analytics(tweet_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error fetching Twitter analytics: {str(e)}")
+
+# LinkedIn-specific endpoints
+@api_router.post("/linkedin/post")
+async def post_linkedin_direct(linkedin_request: LinkedInPostRequest, access_token: str):
+    """Direct LinkedIn posting endpoint"""
+    result = await post_to_linkedin(linkedin_request.text, access_token, linkedin_request.visibility)
+    
+    if result['success']:
+        return {
+            "message": "LinkedIn post created successfully",
+            "post_urn": result['post_id'],
+            "platform": "linkedin"
+        }
+    else:
+        raise HTTPException(status_code=400, detail=result['error'])
+
+@api_router.get("/linkedin/profile")
+async def get_linkedin_profile(access_token: str):
+    """Get LinkedIn user profile"""
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "X-Restli-Protocol-Version": "2.0.0"
+        }
+        
+        response = requests.get(
+            "https://api.linkedin.com/v2/people/~:(id,firstName,lastName,profilePicture(displayImage~:playableStreams))",
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to fetch LinkedIn profile")
+        
+        return response.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching LinkedIn profile: {str(e)}")
 
 # Analytics endpoints
 @api_router.post("/analytics", response_model=Analytics)
