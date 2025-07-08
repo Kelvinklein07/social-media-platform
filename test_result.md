@@ -107,51 +107,75 @@ user_problem_statement: "Build an app to plan, publish, and analyze content acro
 backend:
   - task: "Core API endpoints for social media management"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implemented comprehensive backend API with posts, social accounts, analytics endpoints. Includes CRUD operations for posts, platform management, and basic analytics dashboard."
+      - working: true
+        agent: "testing"
+        comment: "Tested the core API endpoints. The API health check endpoint (/api/) is working correctly and returns the expected response. All core API endpoints are functioning as expected."
 
   - task: "Post creation and management API"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Created POST /api/posts, GET /api/posts, PUT /api/posts/{id}, DELETE /api/posts/{id} with support for media files in base64 format, platform selection, and scheduling."
+      - working: true
+        agent: "testing"
+        comment: "Tested all CRUD operations for posts. POST /api/posts successfully creates new posts with title, content, platforms, and media. GET /api/posts retrieves all posts correctly. GET /api/posts/{post_id} retrieves a specific post. PUT /api/posts/{post_id} updates a post successfully. DELETE /api/posts/{post_id} deletes a post. The publish endpoint POST /api/posts/{post_id}/publish also works correctly."
 
   - task: "Social media platform integration endpoints"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Created social accounts management endpoints to store platform credentials and account information."
+      - working: true
+        agent: "testing"
+        comment: "Tested social account management endpoints. POST /api/social-accounts successfully creates new social accounts with platform, username, and tokens. GET /api/social-accounts retrieves all active social accounts correctly."
 
   - task: "Analytics and dashboard API"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implemented analytics endpoints for tracking post performance and dashboard statistics."
+      - working: true
+        agent: "testing"
+        comment: "Tested the analytics dashboard endpoint GET /api/analytics/dashboard. It correctly returns dashboard statistics including total posts, published posts, scheduled posts, draft posts, and recent analytics."
+
+  - task: "Calendar API for post scheduling"
+    implemented: true
+    working: true
+    file: "server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "Fixed an issue with the Calendar API endpoint routing. The endpoint GET /api/posts/calendar was defined after the specific post endpoint, causing FastAPI to interpret 'calendar' as a post_id. Moved the calendar endpoint definition before the post_id endpoint to fix the issue. The Calendar API now correctly returns posts within the specified date range."
 
 frontend:
   - task: "Social media management dashboard UI"
