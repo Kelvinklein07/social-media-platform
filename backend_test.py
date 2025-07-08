@@ -274,14 +274,49 @@ def test_twitter_analytics(tweet_id):
 def test_twitter_integration():
     """Test the complete Twitter integration flow"""
     print("\n" + "=" * 80)
-    print("TESTING TWITTER INTEGRATION")
+    print("TESTING TWITTER INTEGRATION WITH UPDATED ACCESS TOKEN SECRET")
     print("=" * 80)
     
-    # Step 1: Test Twitter API connection
-    success, result = test_twitter_api_connection()
-    print_test_result("Twitter API Connection", success, result)
+    # Step 1: Test Twitter API connection with simple text-only tweet
+    print("\n1. Testing Twitter API Authentication with text-only tweet")
+    simple_tweet = {
+        "text": f"Testing Twitter API connection with updated credentials. Timestamp: {datetime.utcnow().isoformat()}"
+    }
     
-    # Step 2: Create a Twitter-specific post
+    try:
+        response = requests.post(f"{API_URL}/twitter/post", json=simple_tweet)
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✅ Twitter Authentication: PASSED")
+            print(f"   Response: {result}")
+            tweet_id = result.get('tweet_id')
+            print(f"   Tweet ID: {tweet_id}")
+        else:
+            print(f"❌ Twitter Authentication: FAILED")
+            print(f"   Status code: {response.status_code}")
+            print(f"   Response: {response.text}")
+            print("   The updated Access Token Secret may still be incorrect.")
+            return
+    except Exception as e:
+        print(f"❌ Twitter Authentication: FAILED")
+        print(f"   Error: {str(e)}")
+        return
+    
+    print("-" * 80)
+    
+    # Step 2: Test direct Twitter posting with media
+    print("\n2. Testing Direct Twitter Posting with media")
+    direct_success, direct_result = test_twitter_direct_post()
+    print_test_result("Direct Twitter Posting with Media", direct_success, direct_result)
+    
+    # Get tweet_id from direct posting if available
+    media_tweet_id = None
+    if direct_success and 'tweet_id' in direct_result:
+        media_tweet_id = direct_result['tweet_id']
+        print(f"Direct posted to Twitter with tweet ID: {media_tweet_id}")
+    
+    # Step 3: Create a Twitter-specific post through the post creation endpoint
+    print("\n3. Testing Enhanced Post Publishing with Twitter platform")
     post_success, post_result = test_create_twitter_post()
     print_test_result("Create Twitter Post", post_success, post_result)
     
@@ -290,8 +325,8 @@ def test_twitter_integration():
         twitter_post_id = post_result.get('id')
         print(f"Created Twitter post with ID: {twitter_post_id}")
     
-    # Step 3: Publish the Twitter post
-    tweet_id = None
+    # Step 4: Publish the Twitter post
+    platform_tweet_id = None
     if twitter_post_id:
         publish_success, publish_result = test_publish_post(twitter_post_id)
         print_test_result("Publish Twitter Post", publish_success, publish_result)
@@ -300,26 +335,23 @@ def test_twitter_integration():
         if publish_success and 'results' in publish_result and 'twitter' in publish_result['results']:
             twitter_result = publish_result['results']['twitter']
             if twitter_result.get('success') and 'post_id' in twitter_result:
-                tweet_id = twitter_result['post_id']
-                print(f"Published to Twitter with tweet ID: {tweet_id}")
+                platform_tweet_id = twitter_result['post_id']
+                print(f"Published to Twitter with tweet ID: {platform_tweet_id}")
     
-    # Step 4: Test direct Twitter posting
-    direct_success, direct_result = test_twitter_direct_post()
-    print_test_result("Direct Twitter Posting", direct_success, direct_result)
-    
-    # Get tweet_id from direct posting if available
-    if direct_success and 'tweet_id' in direct_result:
-        tweet_id = direct_result['tweet_id']
-        print(f"Direct posted to Twitter with tweet ID: {tweet_id}")
-    
-    # Step 5: Test Twitter analytics if we have a tweet_id
-    if tweet_id:
-        analytics_success, analytics_result = test_twitter_analytics(tweet_id)
-        print_test_result("Twitter Analytics", analytics_success, analytics_result)
-    else:
-        print("⚠️ Skipping Twitter analytics test as no tweet_id was obtained")
+    # Step 5: Test Twitter analytics for both tweets if we have tweet_ids
+    print("\n4. Testing Twitter Analytics")
+    for current_tweet_id, tweet_source in [
+        (tweet_id, "simple text tweet"), 
+        (media_tweet_id, "media tweet"),
+        (platform_tweet_id, "platform post")
+    ]:
+        if current_tweet_id:
+            print(f"\nTesting analytics for {tweet_source} (ID: {current_tweet_id})")
+            analytics_success, analytics_result = test_twitter_analytics(current_tweet_id)
+            print_test_result(f"Twitter Analytics for {tweet_source}", analytics_success, analytics_result)
     
     # Step 6: Verify the enhanced post model with social post IDs
+    print("\n5. Verifying Social Post IDs Storage")
     if twitter_post_id:
         post_check_success, post_check_result = test_get_post_by_id(twitter_post_id)
         print_test_result("Verify Enhanced Post Model", post_check_success, post_check_result)
@@ -329,6 +361,10 @@ def test_twitter_integration():
             social_post_ids = post_check_result.get('social_post_ids', {})
             if 'twitter' in social_post_ids:
                 print(f"✅ Post contains Twitter social_post_id: {social_post_ids['twitter']}")
+                if social_post_ids['twitter'] == platform_tweet_id:
+                    print(f"✅ Stored Twitter ID matches the actual tweet ID")
+                else:
+                    print(f"❌ Stored Twitter ID ({social_post_ids['twitter']}) doesn't match actual tweet ID ({platform_tweet_id})")
             else:
                 print("❌ Post does not contain Twitter social_post_id")
     
