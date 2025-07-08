@@ -1,0 +1,14 @@
+{
+  "name": "social-media-platform",
+  "version": "1.0.0",
+  "description": "Social Media Management Platform",
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port $PORT"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
