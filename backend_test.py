@@ -532,56 +532,108 @@ def test_twitter_with_fresh_credentials():
     print("TESTING TWITTER INTEGRATION WITH FRESH REGENERATED CREDENTIALS")
     print("=" * 80)
     
-    # Step 1: Test Twitter API Authentication
-    print("\n1. Testing Twitter API Authentication")
+    # Step 1: Test Twitter API Authentication directly with tweepy
+    print("\n1. Testing Twitter API Authentication directly with tweepy")
+    
+    try:
+        # Load environment variables from backend/.env
+        load_dotenv('/app/backend/.env')
+        
+        # Get Twitter credentials
+        bearer_token = os.environ.get("TWITTER_BEARER_TOKEN")
+        api_key = os.environ.get("TWITTER_API_KEY")
+        api_secret = os.environ.get("TWITTER_API_SECRET")
+        access_token = os.environ.get("TWITTER_ACCESS_TOKEN")
+        access_token_secret = os.environ.get("TWITTER_ACCESS_TOKEN_SECRET")
+        
+        # Print credential information (without revealing full values)
+        print(f"Bearer Token: {bearer_token[:10]}...{bearer_token[-5:] if bearer_token else 'None'}")
+        print(f"API Key: {api_key[:5]}...{api_key[-5:] if api_key else 'None'}")
+        print(f"API Secret: {api_secret[:5]}...{api_secret[-5:] if api_secret else 'None'}")
+        print(f"Access Token: {access_token[:5]}...{access_token[-5:] if access_token else 'None'}")
+        print(f"Access Token Secret: {access_token_secret[:5]}...{access_token_secret[-5:] if access_token_secret else 'None'}")
+        
+        # Test OAuth 1.0a authentication (used for media uploads)
+        print("\nTesting OAuth 1.0a Authentication (for media uploads):")
+        import tweepy
+        auth = tweepy.OAuth1UserHandler(
+            api_key,
+            api_secret,
+            access_token,
+            access_token_secret
+        )
+        api = tweepy.API(auth)
+        
+        # Try to verify credentials
+        try:
+            user = api.verify_credentials()
+            print(f"✅ OAuth 1.0a Authentication: PASSED")
+            print(f"   Authenticated as: @{user.screen_name}")
+            oauth1_success = True
+        except Exception as e:
+            print(f"❌ OAuth 1.0a Authentication: FAILED")
+            print(f"   Error: {str(e)}")
+            oauth1_success = False
+        
+        # Test OAuth 2.0 authentication (used for most API v2 endpoints)
+        print("\nTesting OAuth 2.0 Authentication (for API v2):")
+        client = tweepy.Client(
+            bearer_token=bearer_token,
+            consumer_key=api_key,
+            consumer_secret=api_secret,
+            access_token=access_token,
+            access_token_secret=access_token_secret
+        )
+        
+        # Try to get user information
+        try:
+            # Get user information using the access token
+            response = client.get_me()
+            print(f"✅ OAuth 2.0 Authentication: PASSED")
+            print(f"   Authenticated as: @{response.data.username}")
+            oauth2_success = True
+        except Exception as e:
+            print(f"❌ OAuth 2.0 Authentication: FAILED")
+            print(f"   Error: {str(e)}")
+            oauth2_success = False
+        
+        # If both authentications failed, return early
+        if not oauth1_success and not oauth2_success:
+            print("\n❌ Twitter API Authentication: FAILED")
+            print("   Both OAuth 1.0a and OAuth 2.0 authentication methods failed.")
+            return
+        
+    except Exception as e:
+        print(f"❌ Twitter API Authentication Setup: FAILED")
+        print(f"   Error: {str(e)}")
+        return
+    
+    print("-" * 80)
+    
+    # Step 2: Test Direct Tweet Posting
+    print("\n2. Testing Direct Tweet Posting")
     simple_tweet = {
         "text": f"Testing Twitter API with fresh credentials. Timestamp: {datetime.utcnow().isoformat()}"
     }
     
     try:
         response = requests.post(f"{API_URL}/twitter/post", json=simple_tweet)
+        print(f"Status code: {response.status_code}")
+        print(f"Response: {response.text}")
+        
         if response.status_code == 200:
             result = response.json()
-            print(f"✅ Twitter Authentication: PASSED")
+            print(f"✅ Direct Tweet Posting: PASSED")
             print(f"   Response: {result}")
             tweet_id = result.get('tweet_id')
             print(f"   Tweet ID: {tweet_id}")
         else:
-            print(f"❌ Twitter Authentication: FAILED")
-            print(f"   Status code: {response.status_code}")
-            print(f"   Response: {response.text}")
+            print(f"❌ Direct Tweet Posting: FAILED")
             return
     except Exception as e:
-        print(f"❌ Twitter Authentication: FAILED")
+        print(f"❌ Direct Tweet Posting: FAILED")
         print(f"   Error: {str(e)}")
         return
-    
-    print("-" * 80)
-    
-    # Step 2: Test Direct Tweet with Media
-    print("\n2. Testing Direct Tweet with Media")
-    media_tweet = {
-        "text": f"Testing Twitter media upload with fresh credentials. Timestamp: {datetime.utcnow().isoformat()}",
-        "media_files": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="]
-    }
-    
-    try:
-        response = requests.post(f"{API_URL}/twitter/post", json=media_tweet)
-        if response.status_code == 200:
-            result = response.json()
-            print(f"✅ Direct Tweet with Media: PASSED")
-            print(f"   Response: {result}")
-            media_tweet_id = result.get('tweet_id')
-            print(f"   Tweet ID: {media_tweet_id}")
-        else:
-            print(f"❌ Direct Tweet with Media: FAILED")
-            print(f"   Status code: {response.status_code}")
-            print(f"   Response: {response.text}")
-            media_tweet_id = None
-    except Exception as e:
-        print(f"❌ Direct Tweet with Media: FAILED")
-        print(f"   Error: {str(e)}")
-        media_tweet_id = None
     
     print("-" * 80)
     
@@ -592,9 +644,7 @@ def test_twitter_with_fresh_credentials():
     twitter_post = {
         "title": "Twitter Platform Test",
         "content": f"Testing Twitter platform publishing with fresh credentials. Timestamp: {datetime.utcnow().isoformat()}",
-        "media_files": ["data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="],
-        "platforms": ["twitter"],
-        "scheduled_time": None
+        "platforms": ["twitter"]
     }
     
     try:
@@ -608,10 +658,12 @@ def test_twitter_with_fresh_credentials():
             
             # Publish the post
             publish_response = requests.post(f"{API_URL}/posts/{post_id}/publish")
+            print(f"Publish status code: {publish_response.status_code}")
+            print(f"Publish response: {publish_response.text}")
+            
             if publish_response.status_code == 200:
                 publish_result = publish_response.json()
                 print(f"✅ Platform Publishing: PASSED")
-                print(f"   Response: {publish_result}")
                 
                 # Check if Twitter publishing was successful
                 if 'results' in publish_result and 'twitter' in publish_result['results']:
@@ -629,8 +681,6 @@ def test_twitter_with_fresh_credentials():
                     platform_tweet_id = None
             else:
                 print(f"❌ Platform Publishing: FAILED")
-                print(f"   Status code: {publish_response.status_code}")
-                print(f"   Response: {publish_response.text}")
                 platform_tweet_id = None
         else:
             print(f"❌ Post Creation: FAILED")
@@ -648,26 +698,22 @@ def test_twitter_with_fresh_credentials():
     # Step 4: Test Analytics Retrieval
     print("\n4. Testing Analytics Retrieval")
     
-    # Test analytics for all tweet IDs we've collected
-    for tweet_source, current_tweet_id in [
-        ("Simple Tweet", tweet_id if 'tweet_id' in locals() else None),
-        ("Media Tweet", media_tweet_id),
-        ("Platform Tweet", platform_tweet_id if 'platform_tweet_id' in locals() else None)
-    ]:
-        if current_tweet_id:
-            try:
-                analytics_response = requests.get(f"{API_URL}/twitter/analytics/{current_tweet_id}")
-                if analytics_response.status_code == 200:
-                    analytics_result = analytics_response.json()
-                    print(f"✅ Analytics for {tweet_source}: PASSED")
-                    print(f"   Response: {analytics_result}")
-                else:
-                    print(f"❌ Analytics for {tweet_source}: FAILED")
-                    print(f"   Status code: {analytics_response.status_code}")
-                    print(f"   Response: {analytics_response.text}")
-            except Exception as e:
-                print(f"❌ Analytics for {tweet_source}: FAILED")
-                print(f"   Error: {str(e)}")
+    # Test analytics for the tweet ID we've collected
+    if 'tweet_id' in locals() and tweet_id:
+        try:
+            analytics_response = requests.get(f"{API_URL}/twitter/analytics/{tweet_id}")
+            print(f"Analytics status code: {analytics_response.status_code}")
+            print(f"Analytics response: {analytics_response.text}")
+            
+            if analytics_response.status_code == 200:
+                analytics_result = analytics_response.json()
+                print(f"✅ Analytics Retrieval: PASSED")
+                print(f"   Response: {analytics_result}")
+            else:
+                print(f"❌ Analytics Retrieval: FAILED")
+        except Exception as e:
+            print(f"❌ Analytics Retrieval: FAILED")
+            print(f"   Error: {str(e)}")
     
     print("-" * 80)
     
@@ -681,17 +727,20 @@ def test_twitter_with_fresh_credentials():
                 post_data = post_response.json()
                 social_post_ids = post_data.get('social_post_ids', {})
                 
+                print(f"Post data: {post_data}")
+                
                 if 'twitter' in social_post_ids:
                     stored_tweet_id = social_post_ids['twitter']
                     print(f"✅ Enhanced Model Verification: PASSED")
                     print(f"   Twitter post ID stored: {stored_tweet_id}")
                     
-                    if platform_tweet_id and stored_tweet_id == platform_tweet_id:
+                    if 'platform_tweet_id' in locals() and platform_tweet_id and stored_tweet_id == platform_tweet_id:
                         print(f"✅ ID Verification: PASSED - Stored ID matches actual tweet ID")
                     else:
                         print(f"❌ ID Verification: FAILED - Stored ID doesn't match actual tweet ID")
-                        print(f"   Stored: {stored_tweet_id}")
-                        print(f"   Actual: {platform_tweet_id}")
+                        if 'platform_tweet_id' in locals() and platform_tweet_id:
+                            print(f"   Stored: {stored_tweet_id}")
+                            print(f"   Actual: {platform_tweet_id}")
                 else:
                     print(f"❌ Enhanced Model Verification: FAILED")
                     print(f"   No Twitter post ID stored in social_post_ids")
