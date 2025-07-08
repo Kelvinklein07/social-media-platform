@@ -186,7 +186,7 @@ async def post_to_twitter(content: str, media_files: List[str] = None) -> Dict[s
 # Original routes
 @api_router.get("/")
 async def root():
-    return {"message": "Social Media Management Platform API"}
+    return {"message": "Social Media Management Platform API with Twitter Integration"}
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
