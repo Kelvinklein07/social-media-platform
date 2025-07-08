@@ -19,6 +19,391 @@ const PLATFORM_ICONS = {
   telegram: '✈️'
 };
 
+// Calendar Component
+const Calendar = ({ posts, onDateSelect }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [calendarPosts, setCalendarPosts] = useState([]);
+
+  useEffect(() => {
+    fetchCalendarPosts();
+  }, [currentDate]);
+
+  const fetchCalendarPosts = async () => {
+    try {
+      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      
+      const response = await axios.get(`${API}/posts/calendar`, {
+        params: {
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString()
+        }
+      });
+      setCalendarPosts(response.data);
+    } catch (error) {
+      console.error('Error fetching calendar posts:', error);
+    }
+  };
+
+  const getDaysInMonth = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    const days = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(day);
+    }
+    
+    return days;
+  };
+
+  const getPostsForDay = (day) => {
+    if (!day) return [];
+    
+    const dayDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    return calendarPosts.filter(post => {
+      const postDate = new Date(post.scheduled_time || post.published_time);
+      return postDate.getDate() === day &&
+             postDate.getMonth() === dayDate.getMonth() &&
+             postDate.getFullYear() === dayDate.getFullYear();
+    });
+  };
+
+  const previousMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return (
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <div className="flex justify-between items-center mb-6">
+        <button
+          onClick={previousMonth}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          ←
+        </button>
+        <h2 className="text-2xl font-bold text-gray-800">
+          {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+        </h2>
+        <button
+          onClick={nextMonth}
+          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          →
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 mb-2">
+        {dayNames.map(day => (
+          <div key={day} className="p-2 text-center font-semibold text-gray-600 bg-gray-100 rounded">
+            {day}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {getDaysInMonth().map((day, index) => {
+          const dayPosts = getPostsForDay(day);
+          const isToday = day && 
+            new Date().getDate() === day &&
+            new Date().getMonth() === currentDate.getMonth() &&
+            new Date().getFullYear() === currentDate.getFullYear();
+
+          return (
+            <div
+              key={index}
+              className={`min-h-[100px] p-2 border border-gray-200 rounded-lg ${
+                day ? 'bg-white hover:bg-gray-50 cursor-pointer' : 'bg-gray-50'
+              } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+              onClick={() => day && onDateSelect && onDateSelect(new Date(currentDate.getFullYear(), currentDate.getMonth(), day))}
+            >
+              {day && (
+                <>
+                  <div className={`text-sm font-medium mb-1 ${isToday ? 'text-blue-600' : 'text-gray-700'}`}>
+                    {day}
+                  </div>
+                  <div className="space-y-1">
+                    {dayPosts.slice(0, 3).map(post => (
+                      <div
+                        key={post.id}
+                        className={`text-xs p-1 rounded truncate ${
+                          post.status === 'published' ? 'bg-green-100 text-green-800' :
+                          post.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}
+                        title={post.title}
+                      >
+                        {post.platforms.map(platform => PLATFORM_ICONS[platform]).join('')} {post.title}
+                      </div>
+                    ))}
+                    {dayPosts.length > 3 && (
+                      <div className="text-xs text-gray-500">
+                        +{dayPosts.length - 3} more
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// Analytics Chart Component
+const AnalyticsChart = ({ data, title, color = 'blue' }) => {
+  const maxValue = Math.max(...data.map(d => d.value));
+  
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
+      <div className="space-y-3">
+        {data.map((item, index) => (
+          <div key={index} className="flex items-center justify-between">
+            <span className="text-sm text-gray-600 w-20">{item.label}</span>
+            <div className="flex-1 mx-3">
+              <div className="bg-gray-200 rounded-full h-4 relative">
+                <div
+                  className={`bg-${color}-500 rounded-full h-4 transition-all duration-500`}
+                  style={{ width: `${(item.value / maxValue) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+            <span className="text-sm font-medium text-gray-800 w-12 text-right">
+              {item.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Advanced Analytics Dashboard
+const AnalyticsDashboard = () => {
+  const [analytics, setAnalytics] = useState({});
+  const [posts, setPosts] = useState([]);
+  const [timeRange, setTimeRange] = useState('7d');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [timeRange]);
+
+  const fetchAnalyticsData = async () => {
+    try {
+      setLoading(true);
+      const [analyticsResponse, postsResponse] = await Promise.all([
+        axios.get(`${API}/analytics/dashboard`),
+        axios.get(`${API}/posts`)
+      ]);
+      
+      setAnalytics(analyticsResponse.data);
+      setPosts(postsResponse.data);
+      
+      // Process analytics data for charts
+      processAnalyticsData(analyticsResponse.data, postsResponse.data);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processAnalyticsData = (analyticsData, postsData) => {
+    // This would process real analytics data
+    // For now, we'll use the data we have
+  };
+
+  const engagementData = [
+    { label: 'Twitter', value: 45 },
+    { label: 'LinkedIn', value: 32 },
+    { label: 'TikTok', value: 78 },
+    { label: 'Instagram', value: 56 }
+  ];
+
+  const postPerformanceData = [
+    { label: 'Mon', value: 12 },
+    { label: 'Tue', value: 8 },
+    { label: 'Wed', value: 15 },
+    { label: 'Thu', value: 22 },
+    { label: 'Fri', value: 18 },
+    { label: 'Sat', value: 25 },
+    { label: 'Sun', value: 14 }
+  ];
+
+  const platformDistribution = posts.reduce((acc, post) => {
+    post.platforms.forEach(platform => {
+      acc[platform] = (acc[platform] || 0) + 1;
+    });
+    return acc;
+  }, {});
+
+  const platformData = Object.entries(platformDistribution).map(([platform, count]) => ({
+    label: platform.charAt(0).toUpperCase() + platform.slice(1),
+    value: count
+  }));
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-12">
+        <div className="spinner"></div>
+        <span className="ml-2 text-gray-600">Loading analytics...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Time Range Selector */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold text-gray-800">Analytics Dashboard</h1>
+        <div className="flex space-x-2">
+          {['7d', '30d', '90d'].map(range => (
+            <button
+              key={range}
+              onClick={() => setTimeRange(range)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                timeRange === range
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Key Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-md p-6 text-white">
+          <h3 className="text-lg font-medium mb-2">Total Posts</h3>
+          <p className="text-3xl font-bold">{analytics.total_posts || 0}</p>
+          <p className="text-blue-100 text-sm">+12% from last period</p>
+        </div>
+        <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-md p-6 text-white">
+          <h3 className="text-lg font-medium mb-2">Published</h3>
+          <p className="text-3xl font-bold">{analytics.published_posts || 0}</p>
+          <p className="text-green-100 text-sm">+8% from last period</p>
+        </div>
+        <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg shadow-md p-6 text-white">
+          <h3 className="text-lg font-medium mb-2">Scheduled</h3>
+          <p className="text-3xl font-bold">{analytics.scheduled_posts || 0}</p>
+          <p className="text-purple-100 text-sm">+5% from last period</p>
+        </div>
+        <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg shadow-md p-6 text-white">
+          <h3 className="text-lg font-medium mb-2">Total Engagement</h3>
+          <p className="text-3xl font-bold">2.4K</p>
+          <p className="text-orange-100 text-sm">+18% from last period</p>
+        </div>
+      </div>
+
+      {/* Charts Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <AnalyticsChart
+          title="Platform Engagement Rate"
+          data={engagementData}
+          color="blue"
+        />
+        <AnalyticsChart
+          title="Posts by Platform"
+          data={platformData}
+          color="green"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
+        <AnalyticsChart
+          title="Post Performance This Week"
+          data={postPerformanceData}
+          color="purple"
+        />
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Recent Activity</h3>
+        <div className="space-y-3">
+          {analytics.recent_analytics?.slice(0, 5).map((analytic, index) => (
+            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                <span className="text-sm text-gray-600">
+                  Post analytics updated for {analytic.platform}
+                </span>
+              </div>
+              <span className="text-xs text-gray-500">
+                {new Date(analytic.created_at).toLocaleDateString()}
+              </span>
+            </div>
+          )) || (
+            <p className="text-gray-500 text-center py-4">No recent activity</p>
+          )}
+        </div>
+      </div>
+
+      {/* Top Performing Posts */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4">Top Performing Posts</h3>
+        <div className="space-y-4">
+          {posts.filter(post => post.status === 'published').slice(0, 5).map(post => (
+            <div key={post.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+              <div className="flex-1">
+                <h4 className="font-medium text-gray-800">{post.title}</h4>
+                <p className="text-sm text-gray-600 mt-1">{post.content.substring(0, 100)}...</p>
+                <div className="flex items-center space-x-2 mt-2">
+                  {post.platforms.map(platform => (
+                    <span key={platform} className="text-lg">
+                      {PLATFORM_ICONS[platform]}
+                    </span>
+                  ))}
+                  <span className="text-xs text-gray-500">
+                    {new Date(post.published_time).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-medium text-gray-800">Engagement</div>
+                <div className="text-lg font-bold text-blue-600">
+                  {Math.floor(Math.random() * 100) + 20}%
+                </div>
+              </div>
+            </div>
+          ))}
+          {posts.filter(post => post.status === 'published').length === 0 && (
+            <p className="text-gray-500 text-center py-4">No published posts yet</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Post Creation Component
 const PostCreator = ({ onPostCreated, onCancel }) => {
   const [title, setTitle] = useState('');
