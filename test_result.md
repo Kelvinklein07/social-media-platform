@@ -177,6 +177,21 @@ backend:
         agent: "testing"
         comment: "Fixed an issue with the Calendar API endpoint routing. The endpoint GET /api/posts/calendar was defined after the specific post endpoint, causing FastAPI to interpret 'calendar' as a post_id. Moved the calendar endpoint definition before the post_id endpoint to fix the issue. The Calendar API now correctly returns posts within the specified date range."
 
+  - task: "Twitter API Integration"
+    implemented: true
+    working: false
+    file: "server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Implemented Twitter API integration with post_to_twitter function, enhanced publish endpoint, direct Twitter posting endpoint, and Twitter analytics endpoint."
+      - working: false
+        agent: "testing"
+        comment: "Tested the Twitter API integration. The code implementation is correct, but the Twitter API credentials are not working. All Twitter API calls return a 401 Unauthorized error. The enhanced post model with social_post_ids field is implemented correctly, but since the Twitter API calls fail, no Twitter post IDs are being stored. The Twitter-specific endpoints (/api/twitter/post and /api/twitter/analytics/{tweet_id}) are implemented correctly but return 401 errors due to invalid credentials."
+
 frontend:
   - task: "Social media management dashboard UI"
     implemented: true
@@ -228,9 +243,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Social media management dashboard UI"
-    - "Post creation interface"
-  stuck_tasks: []
+    - "Twitter API Integration"
+  stuck_tasks: 
+    - "Twitter API Integration"
   test_all: false
   test_priority: "high_first"
 
@@ -241,3 +256,5 @@ agent_communication:
     message: "Completed comprehensive testing of all backend API endpoints. All endpoints are working correctly. Fixed an issue with the Calendar API endpoint routing by moving the endpoint definition before the post_id endpoint. Created a comprehensive backend_test.py script that tests all API endpoints. All tests are now passing."
   - agent: "testing"
     message: "Completed comprehensive testing of the frontend UI. The social media management dashboard UI and post creation interface are working correctly. Navigation between tabs, post creation, platform selection, scheduling, and post publishing all work as expected. There is a minor issue with post deletion functionality - sometimes posts remain visible after clicking Delete. The UI is responsive and renders correctly on different screen sizes. Calendar and Analytics placeholders are displayed correctly."
+  - agent: "testing"
+    message: "Tested the Twitter API integration. The code implementation is correct, but the Twitter API credentials are not working. All Twitter API calls return a 401 Unauthorized error. This is likely due to invalid or expired API keys and tokens. The enhanced post model with social_post_ids field is implemented correctly, but since the Twitter API calls fail, no Twitter post IDs are being stored. The Twitter-specific endpoints (/api/twitter/post and /api/twitter/analytics/{tweet_id}) are implemented correctly but return 401 errors due to invalid credentials."
