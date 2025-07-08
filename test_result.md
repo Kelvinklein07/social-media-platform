@@ -312,8 +312,8 @@ metadata:
 
 test_plan:
   current_focus:
-    - "TikTok API Integration"
-    - "Multi-Platform Publishing"
+    - "Content calendar and scheduling"
+    - "Analytics dashboard"
   stuck_tasks: 
     - "Twitter API Integration"
   test_all: false
