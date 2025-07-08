@@ -150,6 +150,24 @@ async def get_posts(status: Optional[str] = None, limit: int = 50):
     posts = await db.posts.find(query).sort("created_at", -1).limit(limit).to_list(limit)
     return [Post(**post) for post in posts]
 
+# Calendar view - get posts by date range
+@api_router.get("/posts/calendar")
+async def get_posts_calendar(start_date: str, end_date: str):
+    try:
+        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+    
+    posts = await db.posts.find({
+        "$or": [
+            {"scheduled_time": {"$gte": start, "$lte": end}},
+            {"published_time": {"$gte": start, "$lte": end}}
+        ]
+    }).sort("scheduled_time", 1).to_list(1000)
+    
+    return [Post(**post) for post in posts]
+
 @api_router.get("/posts/{post_id}", response_model=Post)
 async def get_post(post_id: str):
     post = await db.posts.find_one({"id": post_id})
