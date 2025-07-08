@@ -438,4 +438,9 @@ def run_all_tests():
     print("=" * 80)
 
 if __name__ == "__main__":
-    run_all_tests()
+    print("\n" + "=" * 80)
+    print("TESTING TWITTER INTEGRATION WITH UPDATED ACCESS TOKEN SECRET")
+    print("=" * 80)
+    
+    # Only run the Twitter integration test
+    test_twitter_integration()
